@@ -1,0 +1,580 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Motor Vibration Analytics Dashboard</title>
+    
+    <!-- Preload critical resources -->
+    <link rel="preload" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" as="style">
+    <link rel="preload" href="https://cdn.tailwindcss.com" as="script">
+    
+    <!-- Load CSS resources -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" 
+          rel="stylesheet" 
+          integrity="sha512-9usAa10IRO0HhonpyAIVpjrylPvoDwiPUiKdWk5t3PyolY1cOd4DSE0Ga+ri4AuTroPR5aQvXU9xC6qOPnzFeg==" 
+          crossorigin="anonymous" 
+          referrerpolicy="no-referrer">
+    
+    <!-- Load JavaScript resources -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    
+    <!-- CSS Loading Check -->
+    <script>
+        window.addEventListener('load', function() {
+            if (!document.styleSheets.length) {
+                console.error('CSS failed to load');
+                alert('Warning: Some styles failed to load. Please refresh the page.');
+            }
+        });
+    </script>
+
+    <!-- Fallback and Custom Styles -->
+    <style>
+        :root {
+            --primary-font: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        
+        body {
+            font-family: var(--primary-font);
+            background-color: #f8fafc;
+            height: 100%;
+            overflow-y: auto;
+            margin: 0;
+            padding: 0;
+        }
+        
+        /* Ensure basic styling even if Tailwind fails */
+        .basic-container {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+        
+        /* Status Cards */
+        .status-card {
+            transition: all 0.3s ease;
+            border-radius: 0.75rem;
+            padding: 1rem;
+            background: white;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        
+        .status-card:hover {
+            transform: translateY(-5px);
+        }
+        
+        /* Status Colors */
+        .status-normal { 
+            color: #10b981 !important; 
+            background-color: #ecfdf5 !important; 
+        }
+        
+        .status-overheat { 
+            color: #f59e0b !important; 
+            background-color: #fffbeb !important; 
+        }
+        
+        .status-failure { 
+            color: #ef4444 !important; 
+            background-color: #fef2f2 !important; 
+        }
+        
+        /* Chart Containers */
+        .chart-container {
+            background: white;
+            border-radius: 0.75rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            height: 300px;
+            overflow: hidden;
+        }
+        
+        .distribution-container {
+            height: 300px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #statusDistribution {
+            flex: 1;
+            min-height: 0;
+        }
+        
+        .chart-wrapper {
+            position: relative;
+            height: 250px;
+        }
+        
+        #vibrationChart {
+            position: absolute;
+            left: 0;
+            top: 0;
+            right: 0;
+            bottom: 0;
+        }
+        
+        /* Responsive Grid */
+        .dashboard-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            padding: 1rem;
+        }
+        
+        /* Ensure text contrast */
+        .text-gray-900 {
+            color: #111827 !important;
+        }
+        
+        .text-gray-500 {
+            color: #6b7280 !important;
+        }
+        
+        /* Button styles */
+        .btn-primary {
+            background-color: #3b82f6;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.5rem;
+            transition: background-color 0.2s;
+        }
+        
+        .btn-primary:hover {
+            background-color: #2563eb;
+        }
+    </style>
+</head>
+<body class="flex flex-col h-full">
+    <!-- Navigation -->
+    <nav class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <i class="fas fa-gauge-high text-blue-600 text-2xl mr-3"></i>
+                    <h1 class="text-xl font-semibold text-gray-900">Motor Vibration Analytics</h1>
+                </div>
+                <div class="flex items-center">
+                    <span id="currentTime" class="text-gray-500"></span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="flex-1 overflow-auto">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+            <!-- Status Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                <!-- Current Status -->
+                <div class="status-card bg-white rounded-xl shadow-sm p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-lg font-medium text-gray-900">Current Status</h3>
+                        <i class="fas fa-circle-info text-blue-500"></i>
+                    </div>
+                    <div id="currentStatus" class="text-2xl font-bold mb-2 p-2 rounded-lg">Normal</div>
+                    <div id="currentVibration" class="text-gray-500 text-lg">Vibration Level: <span class="font-semibold">0.00g</span></div>
+                </div>
+
+                <!-- Health Score -->
+                <div class="status-card bg-white rounded-xl shadow-sm p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-lg font-medium text-gray-900">Health Score</h3>
+                        <i class="fas fa-heart-pulse text-red-500"></i>
+                    </div>
+                    <div class="gauge-chart" id="healthGauge"></div>
+                </div>
+
+                <!-- Cooling Efficiency -->
+                <div class="status-card bg-white rounded-xl shadow-sm p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-lg font-medium text-gray-900">Cooling Status</h3>
+                        <i class="fas fa-snowflake text-blue-500"></i>
+                    </div>
+                    <div id="coolingStatus" class="text-2xl font-bold mb-2 p-2 rounded-lg">Efficient</div>
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                        <div>Duration: <span id="coolingDuration">0</span>min</div>
+                        <div>Reduction: <span id="coolingReduction">0</span>%</div>
+                    </div>
+                </div>
+
+                <!-- Alert Status -->
+                <div class="status-card bg-white rounded-xl shadow-sm p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h3 class="text-lg font-medium text-gray-900">System Alerts</h3>
+                        <i class="fas fa-bell text-yellow-500"></i>
+                    </div>
+                    <div id="alertStatus" class="space-y-2 overflow-auto" style="max-height: 150px;">
+                        <!-- Alert items will be dynamically added here -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+                <!-- Vibration History -->
+                <div class="chart-container p-4">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Vibration History</h3>
+                    <div class="chart-wrapper">
+                        <canvas id="vibrationChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Status Distribution -->
+                <div class="chart-container p-4">
+                    <h3 class="text-lg font-medium text-gray-900 mb-4">Status Distribution</h3>
+                    <div class="distribution-container">
+                        <div id="statusDistribution"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistics Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+                <div class="bg-white rounded-xl shadow-sm p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="text-sm font-medium text-gray-500">Normal Events</h4>
+                        <i class="fas fa-check-circle text-green-500"></i>
+                    </div>
+                    <div id="normalCount" class="text-2xl font-bold text-gray-900">0</div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="text-sm font-medium text-gray-500">Overheat Events</h4>
+                        <i class="fas fa-temperature-high text-yellow-500"></i>
+                    </div>
+                    <div id="overheatCount" class="text-2xl font-bold text-gray-900">0</div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="text-sm font-medium text-gray-500">Failure Events</h4>
+                        <i class="fas fa-exclamation-triangle text-red-500"></i>
+                    </div>
+                    <div id="failureCount" class="text-2xl font-bold text-gray-900">0</div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="text-sm font-medium text-gray-500">Efficient Cooling</h4>
+                        <i class="fas fa-snowflake text-blue-500"></i>
+                    </div>
+                    <div id="efficientCount" class="text-2xl font-bold text-gray-900">0</div>
+                </div>
+                <div class="bg-white rounded-xl shadow-sm p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <h4 class="text-sm font-medium text-gray-500">Inefficient Cooling</h4>
+                        <i class="fas fa-fire text-red-500"></i>
+                    </div>
+                    <div id="inefficientCount" class="text-2xl font-bold text-gray-900">0</div>
+                </div>
+            </div>
+
+            <!-- Control Panel -->
+            <div class="bg-white rounded-xl shadow-sm p-4">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Real-time Monitoring</h3>
+                    <i class="fas fa-sync text-blue-500"></i>
+                </div>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Current Vibration Level</label>
+                        <div class="flex items-center space-x-2">
+                            <div id="currentVibrationValue" class="text-3xl font-bold text-gray-900">0.00g</div>
+                            <div id="lastUpdate" class="text-sm text-gray-500"></div>
+                        </div>
+                        <div class="mt-2 text-xs text-gray-500">
+                            <div class="flex items-center space-x-2">
+                                <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                                <span>Normal (< 2.0g)</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="w-2 h-2 bg-yellow-500 rounded-full"></span>
+                                <span>Overheating (2.0-3.0g)</span>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                <span class="w-2 h-2 bg-red-500 rounded-full"></span>
+                                <span>Failure (> 3.0g)</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-end">
+                        <button onclick="refreshData()" 
+                                class="w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors">
+                            Refresh Data
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize ApexCharts for Health Gauge
+        const healthGauge = new ApexCharts(document.querySelector("#healthGauge"), {
+            series: [100],
+            chart: {
+                type: 'radialBar',
+                height: 200
+            },
+            plotOptions: {
+                radialBar: {
+                    hollow: {
+                        size: '70%',
+                    },
+                    dataLabels: {
+                        show: true,
+                        name: {
+                            show: true,
+                            fontSize: '16px',
+                            fontWeight: 600,
+                            offsetY: -10
+                        },
+                        value: {
+                            show: true,
+                            fontSize: '30px',
+                            fontWeight: 700,
+                            offsetY: 5
+                        }
+                    }
+                }
+            },
+            fill: {
+                type: 'gradient',
+                gradient: {
+                    shade: 'dark',
+                    type: 'horizontal',
+                    shadeIntensity: 0.5,
+                    gradientToColors: ['#10b981'],
+                    stops: [0, 100]
+                }
+            },
+            stroke: {
+                lineCap: 'round'
+            },
+            labels: ['Health']
+        });
+        healthGauge.render();
+
+        // Initialize Status Distribution Chart
+        const statusDistribution = new ApexCharts(document.querySelector("#statusDistribution"), {
+            series: [0, 0, 0],
+            chart: {
+                type: 'donut',
+                height: '100%',
+                width: '100%'
+            },
+            labels: ['Normal', 'Overheating', 'Failure'],
+            colors: ['#10b981', '#f59e0b', '#ef4444'],
+            legend: {
+                position: 'bottom',
+                offsetY: -5,
+                height: 40
+            },
+            plotOptions: {
+                pie: {
+                    donut: {
+                        size: '70%'
+                    }
+                }
+            },
+            dataLabels: {
+                enabled: true,
+                formatter: function (val) {
+                    return Math.round(val) + '%';
+                }
+            },
+            responsive: [{
+                breakpoint: 480,
+                options: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }]
+        });
+        statusDistribution.render();
+
+        // Initialize Vibration Chart
+        const ctx = document.getElementById('vibrationChart').getContext('2d');
+        const vibrationChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [{
+                    label: 'Vibration Level (g)',
+                    data: [],
+                    borderColor: '#3b82f6',
+                    tension: 0.4,
+                    fill: true,
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 4.0,  // Maximum g-force value
+                        grid: {
+                            color: 'rgba(0, 0, 0, 0.05)'
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+
+        // Initialize counters
+        let counts = {
+            'Normal': 0,
+            'Overheating': 0,
+            'Failure': 0,
+            'cooling': {
+                'Efficient': 0,
+                'Inefficient': 0
+            }
+        };
+
+        // Update current time
+        function updateTime() {
+            const now = new Date();
+            document.getElementById('currentTime').textContent = now.toLocaleString();
+        }
+        setInterval(updateTime, 1000);
+        updateTime();
+
+        // Update health score based on vibration
+        function updateHealthScore(vibration) {
+            const maxVibration = 4.0;  // Maximum g-force
+            const health = Math.max(0, Math.round(100 - (vibration / maxVibration * 100)));
+            healthGauge.updateSeries([health]);
+        }
+
+        // Add alert message
+        function addAlert(status, vibration) {
+            const alertStatus = document.getElementById('alertStatus');
+            const alertClass = status === 'Normal' ? 'text-green-500' : 
+                             status === 'Overheating' ? 'text-yellow-500' : 'text-red-500';
+            const alert = document.createElement('div');
+            alert.className = `flex items-center justify-between p-3 bg-white rounded-lg border ${alertClass} border-current`;
+            alert.innerHTML = `
+                <span class="text-sm">${status} detected - ${vibration.toFixed(2)}g</span>
+                <span class="text-xs">${new Date().toLocaleTimeString()}</span>
+            `;
+            alertStatus.prepend(alert);
+            if (alertStatus.children.length > 3) {
+                alertStatus.removeChild(alertStatus.lastChild);
+            }
+        }
+
+        // Function to fetch latest data from MongoDB
+        async function fetchLatestData() {
+            try {
+                const response = await fetch('/get_latest_data');
+                const data = await response.json();
+                if (data.error) {
+                    console.error('Error:', data.error);
+                    return;
+                }
+                updateUI(data);
+                document.getElementById('lastUpdate').textContent = 
+                    `Last updated: ${new Date().toLocaleTimeString()}`;
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
+
+        // Function to refresh data manually
+        function refreshData() {
+            fetchLatestData();
+        }
+
+        // Update current vibration value display
+        function updateCurrentVibration(vibration) {
+            const vibrationElement = document.getElementById('currentVibrationValue');
+            vibrationElement.textContent = `${vibration.toFixed(2)}g`;
+            
+            // Update color based on vibration level
+            if (vibration < 2.0) {
+                vibrationElement.className = 'text-3xl font-bold text-green-600';
+            } else if (vibration < 3.0) {
+                vibrationElement.className = 'text-3xl font-bold text-yellow-600';
+            } else {
+                vibrationElement.className = 'text-3xl font-bold text-red-600';
+            }
+        }
+
+        // Update UI with prediction results
+        function updateUI(data) {
+            // Update status
+            const statusDiv = document.getElementById('currentStatus');
+            statusDiv.textContent = data.status;
+            statusDiv.className = `text-2xl font-bold mb-2 p-2 rounded-lg status-${data.status.toLowerCase()}`;
+            
+            // Update vibration level in Current Status card
+            document.getElementById('currentVibration').innerHTML = 
+                `Vibration Level: <span class="font-semibold">${data.vibration.toFixed(2)}g</span>`;
+            
+            // Update vibration with color coding
+            updateCurrentVibration(data.vibration);
+            
+            // Update health score
+            updateHealthScore(data.vibration);
+            
+            // Update cooling status
+            const coolingDiv = document.getElementById('coolingStatus');
+            coolingDiv.textContent = data.cooling_status;
+            coolingDiv.className = `text-2xl font-bold mb-2 p-2 rounded-lg status-${
+                data.cooling_status === 'Efficient' ? 'normal' : 'failure'
+            }`;
+            
+            // Update cooling metrics
+            document.getElementById('coolingDuration').textContent = data.cooling_metrics.duration.toFixed(1);
+            document.getElementById('coolingReduction').textContent = data.cooling_metrics.reduction.toFixed(1);
+            
+            // Update counts
+            counts = data.counts;
+            
+            document.getElementById('normalCount').textContent = counts.status['Normal'];
+            document.getElementById('overheatCount').textContent = counts.status['Overheating'];
+            document.getElementById('failureCount').textContent = counts.status['Failure'];
+            document.getElementById('efficientCount').textContent = counts.cooling['Efficient'];
+            document.getElementById('inefficientCount').textContent = counts.cooling['Inefficient'];
+            
+            // Update vibration chart
+            const chartData = data.history.vibration;
+            vibrationChart.data.labels = chartData.map(d => new Date(d.time).toLocaleTimeString());
+            vibrationChart.data.datasets[0].data = chartData.map(d => d.value);
+            vibrationChart.update();
+            
+            // Update status distribution
+            const total = counts.status['Normal'] + counts.status['Overheating'] + counts.status['Failure'];
+            statusDistribution.updateSeries([
+                (counts.status['Normal'] / total) * 100,
+                (counts.status['Overheating'] / total) * 100,
+                (counts.status['Failure'] / total) * 100
+            ]);
+            
+            // Add alert
+            addAlert(data.status, data.vibration);
+        }
+
+        // Fetch data every 5 seconds
+        setInterval(fetchLatestData, 5000);
+        
+        // Initial data fetch
+        fetchLatestData();
+    </script>
+</body>
+</html>

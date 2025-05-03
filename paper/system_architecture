@@ -1,0 +1,19 @@
+digraph {
+	S [label="IoT Sensors
+(Vibration, Current, Flow, Temp)"]
+	E [label="ESP32
+(MQTT Protocol)"]
+	M [label="MongoDB
+(Real-time Storage)"]
+	P [label="Preprocessing
+(Data Cleaning, Feature Extraction)"]
+	ML [label="Machine Learning Models
+(XGBoost, LSTM, Random Forest)"]
+	D [label="Dashboard & Alerts
+(Flask Web App)"]
+	S -> E [label="Real-time Data Transmission"]
+	E -> M [label="Store via MQTT"]
+	M -> P [label="Retrieve for Processing"]
+	P -> ML [label="Train & Predict"]
+	ML -> D [label="Send Predictions & Alerts"]
+}
